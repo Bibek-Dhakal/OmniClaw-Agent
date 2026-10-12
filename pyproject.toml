@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "omniclaw-agent"
+version = "0.0.0"
+description = "Multi-platform agentic runtime: messaging, voice, connectors, memory and headless browser automation."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Bibek Dhakal" }]
+dependencies = [
+    "litellm",
+    "httpx",
+    "asyncpg",
+    "boto3",
+    "mem0ai",
+    "python-telegram-bot",
+    "fastapi",
+    "uvicorn",
+    "pydantic-settings",
+    "playwright",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "pre-commit",
+]
+
+[project.scripts]
+omniclaw = "omniclaw.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/omniclaw"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["B008", "E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=omniclaw --cov-report=term-missing"
