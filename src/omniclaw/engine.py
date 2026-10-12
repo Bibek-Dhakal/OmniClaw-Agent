@@ -32,6 +32,7 @@ class AgentEngine:
                 tools=specs,
                 api_base=self._profile.api_base,
                 api_key=self._profile.api_key,
+                num_retries=3,  # Automatically retry on temporary API errors (like 503s or rate limits)
             )
             message = response.choices[0].message
             calls = getattr(message, "tool_calls", None)
