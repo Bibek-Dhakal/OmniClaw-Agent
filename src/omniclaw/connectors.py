@@ -43,25 +43,49 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
         headers = {"x-api-key": composio_key}
 
         async def composio_list_tools(args: dict[str, Any], ctx: ToolContext) -> Any:
-            # Fetch up to 200 tools instead of 25 to avoid missing key endpoints
-            response = await http.get(
-                f"{base}/api/v3/tools",
-                headers=headers,
-                params={"toolkit_slug": args["toolkit"], "limit": 200},
-            )
-            if not response.is_success:
-                return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
+            items = []
+            page = 1
 
-            items = response.json().get("items", [])
-            query = args.get("query", "").lower()
+            # Paginate through the Composio API to ensure we get ALL tools for massive APIs like GitHub
+            while True:
+                response = await http.get(
+                    f"{base}/api/v3/tools",
+                    headers=headers,
+                    params={"toolkit_slug": args["toolkit"], "limit": 100, "page": page},
+                )
+                if not response.is_success:
+                    if not items:
+                        return {
+                            "error": f"HTTP {response.status_code}",
+                            "body": response.text[:2000],
+                        }
+                    break
+
+                page_items = response.json().get("items", [])
+                if not page_items:
+                    break
+
+                items.extend(page_items)
+                if len(page_items) < 100:
+                    break
+
+                page += 1
+                if page > 20:  # Safety limit to prevent infinite loops (2000 tools max)
+                    break
+
+            # Smart Multi-Word Fuzzy Search
+            # Splits "list repos" into ["list", "repos"] and ensures ALL words are present
+            raw_query = args.get("query", "").lower()
+            query_words = [w.strip() for w in raw_query.split() if w.strip()]
 
             results = []
             for item in items:
                 slug = (item.get("slug") or "").lower()
                 desc = (item.get("description") or "").lower()
+                search_text = f"{slug} {desc}"
 
-                # If the agent provided a search query, filter the tools locally
-                if query and query not in slug and query not in desc:
+                # If agent provided a search query, ensure ALL words are in the text
+                if query_words and not all(word in search_text for word in query_words):
                     continue
 
                 results.append(
@@ -70,7 +94,7 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
 
             if not results:
                 return {
-                    "error": f"No tools found matching '{query}'. Try a different search term or omit it."
+                    "error": f"No tools found matching '{raw_query}'. Try broader keywords like 'list', 'get', or 'create'."
                 }
 
             # Return max 50 to keep the LLM context clean
@@ -92,7 +116,7 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                 description=(
                     "List available Composio tool slugs for a toolkit "
                     "(for example gmail, googlecalendar, linkedin, instagram). "
-                    "Use the 'query' parameter to search for specific actions if there are too many."
+                    "Use the 'query' parameter to search for specific actions. Use broad keywords like 'list repositories'."
                 ),
                 parameters={
                     "type": "object",
@@ -100,7 +124,7 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                         "toolkit": {"type": "string"},
                         "query": {
                             "type": "string",
-                            "description": "Optional search term to filter tools by name or description.",
+                            "description": "Optional search terms. Uses fuzzy matching (e.g., 'list repositories' finds tools containing both words).",
                         },
                     },
                     "required": ["toolkit"],
