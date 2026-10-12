@@ -77,6 +77,14 @@ class PostgresStore:
             result,
         )
 
+    async def recent_actions(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = await self._pool.fetch(
+            "SELECT id, channel, tool, args, ok, result, created_at FROM actions "
+            "ORDER BY id DESC LIMIT $1",
+            limit,
+        )
+        return [dict(row) for row in rows]
+
     async def close(self) -> None:
         await self._pool.close()
 

@@ -16,8 +16,22 @@ def composio_needs_approval(args: dict[str, Any]) -> bool:
     return not _READ_ONLY.search(str(args.get("tool_slug", "")))
 
 
+def composio_describe(args: dict[str, Any]) -> str:
+    """Make the approval prompt for Composio human-readable instead of raw JSON."""
+    slug = args.get("tool_slug", "Unknown Action")
+    kwargs = args.get("arguments", {})
+    return f"Use '{slug}'\nDetails: {kwargs}"
+
+
 def nango_needs_approval(args: dict[str, Any]) -> bool:
     return str(args.get("method", "GET")).upper() != "GET"
+
+
+def nango_describe(args: dict[str, Any]) -> str:
+    """Make the approval prompt for Nango human-readable instead of raw JSON."""
+    method = args.get("method", "GET")
+    path = args.get("path", "")
+    return f"Make a {method} request to {path}"
 
 
 def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[Tool]:
@@ -111,6 +125,7 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                 },
                 handler=composio_execute,
                 needs_approval=composio_needs_approval,
+                describe=composio_describe,
             )
         )
 
@@ -154,6 +169,7 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                 },
                 handler=nango_request,
                 needs_approval=nango_needs_approval,
+                describe=nango_describe,
             )
         )
 

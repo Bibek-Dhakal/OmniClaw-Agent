@@ -2,11 +2,13 @@
 
 import argparse
 import asyncio
+import html
 import logging
 
 import httpx
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 from omniclaw.approvals import ApprovalBroker
 from omniclaw.browser import BrowserManager, build_browser_tools, interactive_login
@@ -53,6 +55,52 @@ async def run() -> None:
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/logs", response_class=HTMLResponse)
+    async def view_logs() -> HTMLResponse:
+        actions = await store.recent_actions(50)
+        rows = []
+        for a in actions:
+            status_color = "green" if a["ok"] else "red"
+            rows.append(
+                f"<tr>"
+                f"<td>{a['id']}</td>"
+                f"<td>{html.escape(a['tool'])}</td>"
+                f"<td style='color:{status_color}; font-weight:bold;'>{a['ok']}</td>"
+                f"<td><pre style='margin:0;max-width:300px;overflow-x:auto'>{html.escape(a['args'])}</pre></td>"
+                f"<td><pre style='margin:0;max-width:500px;overflow-x:auto;max-height:200px;overflow-y:auto'>{html.escape(a['result'])}</pre></td>"
+                f"</tr>"
+            )
+
+        html_content = f"""
+        <html>
+        <head>
+            <title>OmniClaw Execution Logs</title>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #f9f9f9; color: #333; }}
+                table {{ border-collapse: collapse; width: 100%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+                th, td {{ border: 1px solid #eee; padding: 12px; vertical-align: top; font-size: 14px; }}
+                th {{ background-color: #f1f5f9; text-align: left; font-weight: 600; color: #475569; }}
+                pre {{ white-space: pre-wrap; word-wrap: break-word; font-family: "Courier New", Courier, monospace; font-size: 13px; color: #444; background: #f8fafc; padding: 8px; border-radius: 4px; }}
+                h2 {{ color: #1e293b; }}
+            </style>
+        </head>
+        <body>
+            <h2>Recent Agent Actions (Last 50)</h2>
+            <table>
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th style="width: 150px;">Tool</th>
+                    <th style="width: 50px;">Status</th>
+                    <th>Arguments</th>
+                    <th>Result / Error</th>
+                </tr>
+                {"".join(rows)}
+            </table>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
 
     telegram = TelegramChannel(settings, orchestrator) if settings.telegram_enabled else None
     if settings.whatsapp_enabled:
