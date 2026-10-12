@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # Browser
     browser_headless: bool = True
     browser_state_dir: str = "./.browser_state"
-    browser_allowed_domains: str = "instagram.com,tinder.com,linkedin.com"
+    browser_allowed_domains: str = "instagram.com,tinder.com,linkedin.com,github.com"
 
     @property
     def telegram_allowed_ids(self) -> set[str]:

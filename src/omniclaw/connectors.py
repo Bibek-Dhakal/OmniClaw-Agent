@@ -34,7 +34,8 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                 headers=headers,
                 params={"toolkit_slug": args["toolkit"], "limit": 25},
             )
-            response.raise_for_status()
+            if not response.is_success:
+                return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
             items = response.json().get("items", [])
             return [
                 {"slug": item.get("slug"), "description": (item.get("description") or "")[:200]}
@@ -47,7 +48,8 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                 headers=headers,
                 json={"user_id": settings.composio_user_id, "arguments": args.get("arguments", {})},
             )
-            response.raise_for_status()
+            if not response.is_success:
+                return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
             return response.json()
 
         tools.append(

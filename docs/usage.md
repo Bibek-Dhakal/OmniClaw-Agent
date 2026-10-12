@@ -9,20 +9,16 @@ docker compose up --build     # run the full stack
 pytest                        # run tests
 ```
 
-`omniclaw login` opens a visible browser, so run it on a machine with a display. The session is saved to
-`BROWSER_STATE_DIR` and can be mounted into the container.
+`omniclaw login` opens a visible browser, so run it on a machine with a display. The session is saved to `BROWSER_STATE_DIR` and can be mounted into the container.
 
 ## Channels
 
 * Telegram needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS`. Only listed users are served.
-* WhatsApp needs all four of `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` and
-  `WHATSAPP_APP_SECRET`. Set the Meta webhook callback to `https://<host>/webhook/whatsapp`.
+* WhatsApp needs all four of `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` and `WHATSAPP_APP_SECRET`. Set the Meta webhook callback to `https://<host>/webhook/whatsapp`.
 
 ## Approvals
 
-Tools that send, post or modify are held until the owner replies YES (or NO) in the same chat. Read-only Composio tools
-(slug contains FETCH, LIST, GET, SEARCH, FIND or READ) and GET Nango calls run without approval. Set
-`APPROVAL_REQUIRED=false` to disable the gate.
+Tools that send, post or modify are held until the owner replies YES (or NO) in the same chat. Read-only Composio tools (slug contains FETCH, LIST, GET, SEARCH, FIND or READ) and GET Nango calls run without approval. Set `APPROVAL_REQUIRED=false` to disable the gate.
 
 ## Environment variables
 
@@ -76,4 +72,4 @@ Tools that send, post or modify are held until the owner replies YES (or NO) in 
 | STT_API_KEY | secret | empty | Transcription provider key |
 | BROWSER_HEADLESS | bool | true | Run Chromium headless |
 | BROWSER_STATE_DIR | path | ./.browser_state | Saved login sessions |
-| BROWSER_ALLOWED_DOMAINS | csv | instagram.com,tinder.com,linkedin.com | Domains the browser may visit |
+| BROWSER_ALLOWED_DOMAINS | csv | instagram.com,tinder.com,linkedin.com,github.com | Domains the browser may visit |
