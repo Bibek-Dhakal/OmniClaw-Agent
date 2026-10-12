@@ -29,18 +29,38 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
         headers = {"x-api-key": composio_key}
 
         async def composio_list_tools(args: dict[str, Any], ctx: ToolContext) -> Any:
+            # Fetch up to 200 tools instead of 25 to avoid missing key endpoints
             response = await http.get(
                 f"{base}/api/v3/tools",
                 headers=headers,
-                params={"toolkit_slug": args["toolkit"], "limit": 25},
+                params={"toolkit_slug": args["toolkit"], "limit": 200},
             )
             if not response.is_success:
                 return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
+
             items = response.json().get("items", [])
-            return [
-                {"slug": item.get("slug"), "description": (item.get("description") or "")[:200]}
-                for item in items
-            ]
+            query = args.get("query", "").lower()
+
+            results = []
+            for item in items:
+                slug = (item.get("slug") or "").lower()
+                desc = (item.get("description") or "").lower()
+
+                # If the agent provided a search query, filter the tools locally
+                if query and query not in slug and query not in desc:
+                    continue
+
+                results.append(
+                    {"slug": item.get("slug"), "description": (item.get("description") or "")[:200]}
+                )
+
+            if not results:
+                return {
+                    "error": f"No tools found matching '{query}'. Try a different search term or omit it."
+                }
+
+            # Return max 50 to keep the LLM context clean
+            return results[:50]
 
         async def composio_execute(args: dict[str, Any], ctx: ToolContext) -> Any:
             response = await http.post(
@@ -57,11 +77,18 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
                 name="composio_list_tools",
                 description=(
                     "List available Composio tool slugs for a toolkit "
-                    "(for example gmail, googlecalendar, linkedin, instagram)."
+                    "(for example gmail, googlecalendar, linkedin, instagram). "
+                    "Use the 'query' parameter to search for specific actions if there are too many."
                 ),
                 parameters={
                     "type": "object",
-                    "properties": {"toolkit": {"type": "string"}},
+                    "properties": {
+                        "toolkit": {"type": "string"},
+                        "query": {
+                            "type": "string",
+                            "description": "Optional search term to filter tools by name or description.",
+                        },
+                    },
                     "required": ["toolkit"],
                 },
                 handler=composio_list_tools,
