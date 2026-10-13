@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "omniclaw-agent"
-version = "0.0.0"
+version = "0.1.0"
 description = "Multi-platform agentic runtime: messaging, voice, connectors, memory and headless browser automation."
 readme = "README.md"
 requires-python = ">=3.11"
