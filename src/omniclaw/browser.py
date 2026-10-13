@@ -127,7 +127,7 @@ async def interactive_login(settings: Settings, domain: str) -> None:
         await asyncio.to_thread(
             input, "Log in in the opened window, then press Enter here to save the session... "
         )
-        state_dir.mkdir(parents=True, exist_ok=True)
+        state_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
         await context.storage_state(path=str(state_dir / f"{domain}.json"))
         await browser.close()
     print(f"Saved session for {domain} to {state_dir}")
