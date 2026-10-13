@@ -60,56 +60,56 @@ CREATE, DELETE, UPDATE and similar). Nango GET calls run without approval, other
 
 ## Environment variables
 
-| Name                      | Type                     | Default                                                | Description                                         |
-|---------------------------|--------------------------|--------------------------------------------------------|-----------------------------------------------------|
-| LOG_LEVEL                 | string                   | INFO                                                   | Python logging level                                |
-| HOST                      | string                   | 127.0.0.1                                              | Webhook server bind address                         |
-| PORT                      | int                      | 8080                                                   | Webhook server port                                 |
-| OWNER_NAME                | string                   | Owner                                                  | Name used in the system prompt                      |
-| MEMORY_USER_ID            | string                   | owner                                                  | Mem0 user id, shared across channels                |
-| MAX_AGENT_STEPS           | int                      | 12                                                     | Maximum tool-call rounds per request                |
-| HISTORY_TURNS             | int                      | 12                                                     | Conversation turns loaded from Postgres             |
-| APPROVAL_REQUIRED         | bool                     | true                                                   | Require owner approval for risky tools              |
-| APPROVAL_TIMEOUT_SECONDS  | int                      | 300                                                    | Approval wait time before rejection                 |
-| AGENT_ENGINE              | native, hermes, openclaw | native                                                 | Which engine profile is used                        |
-| LLM_MODEL                 | string                   | gemini/gemini-3.8-flash                                | LiteLLM model, for example gemini/..., or openai/<name> for an OpenAI-compatible server |
+| Name                      | Type                     | Default                                                | Description                                                                                      |
+|---------------------------|--------------------------|--------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| LOG_LEVEL                 | string                   | INFO                                                   | Python logging level                                                                             |
+| HOST                      | string                   | 127.0.0.1                                              | Webhook server bind address                                                                      |
+| PORT                      | int                      | 8080                                                   | Webhook server port                                                                              |
+| OWNER_NAME                | string                   | Owner                                                  | Name used in the system prompt                                                                   |
+| MEMORY_USER_ID            | string                   | owner                                                  | Mem0 user id, shared across channels                                                             |
+| MAX_AGENT_STEPS           | int                      | 12                                                     | Maximum tool-call rounds per request                                                             |
+| HISTORY_TURNS             | int                      | 12                                                     | Conversation turns loaded from Postgres                                                          |
+| APPROVAL_REQUIRED         | bool                     | true                                                   | Require owner approval for risky tools                                                           |
+| APPROVAL_TIMEOUT_SECONDS  | int                      | 300                                                    | Approval wait time before rejection                                                              |
+| AGENT_ENGINE              | native, hermes, openclaw | native                                                 | Which engine profile is used                                                                     |
+| LLM_MODEL                 | string                   | gemini/gemini-3.8-flash                                | LiteLLM model, for example gemini/..., or openai/<name> for an OpenAI-compatible server          |
 | LLM_API_BASE              | string                   | empty                                                  | Custom endpoint, for example http://host.docker.internal:8000/v1 (never localhost inside Docker) |
-| LLM_API_KEY               | secret                   | empty                                                  | API key for the native engine                       |
-| HERMES_MODEL              | string                   | openai/hermes                                          | LiteLLM model name for a Hermes endpoint            |
-| HERMES_API_BASE           | string                   | empty                                                  | OpenAI-compatible Hermes endpoint                   |
-| HERMES_API_KEY            | secret                   | empty                                                  | Hermes endpoint key                                 |
-| OPENCLAW_MODEL            | string                   | openai/openclaw                                        | LiteLLM model name for an OpenClaw endpoint         |
-| OPENCLAW_API_BASE         | string                   | empty                                                  | OpenAI-compatible OpenClaw endpoint                 |
-| OPENCLAW_API_KEY          | secret                   | empty                                                  | OpenClaw endpoint key                               |
-| TOOL_ROUTE_TOP_K          | int                      | 8                                                      | Tools loaded per detected app for each message      |
-| TOOL_CACHE_TTL_SECONDS    | int                      | 3600                                                   | How long fetched tool lists are cached              |
-| DATABASE_URL              | string                   | postgresql://omniclaw:omniclaw@localhost:5432/omniclaw | Postgres DSN                                        |
-| POSTGRES_PASSWORD         | secret                   | change-me                                              | Used by docker compose for Postgres and the app DSN |
-| MEM0_API_KEY              | secret                   | empty                                                  | Enables Mem0 semantic memory                        |
-| R2_ACCOUNT_ID             | string                   | empty                                                  | Cloudflare account id                               |
-| R2_ACCESS_KEY_ID          | secret                   | empty                                                  | R2 access key                                       |
-| R2_SECRET_ACCESS_KEY      | secret                   | empty                                                  | R2 secret key                                       |
-| R2_BUCKET                 | string                   | empty                                                  | R2 bucket for audio and screenshots                 |
-| COMPOSIO_API_KEY          | secret                   | empty                                                  | Enables Composio tools                              |
-| COMPOSIO_BASE_URL         | string                   | https://backend.composio.dev                           | Composio API base                                   |
-| COMPOSIO_USER_ID          | string                   | default                                                | Must equal the user id on your ACTIVE Composio connected accounts |
-| NANGO_SECRET_KEY          | secret                   | empty                                                  | Enables the curated Nango tools and proxy tool      |
-| NANGO_BASE_URL            | string                   | https://api.nango.dev                                  | Nango API base. Self-hosted from Docker: http://host.docker.internal:<port> |
-| NANGO_CONNECTION_ID       | string                   | empty                                                  | Preferred Nango connection id when several exist for a provider |
-| TELEGRAM_BOT_TOKEN        | secret                   | empty                                                  | Enables the Telegram channel                        |
-| TELEGRAM_ALLOWED_USER_IDS | csv                      | empty                                                  | Allowed Telegram user ids                           |
-| WHATSAPP_TOKEN            | secret                   | empty                                                  | WhatsApp Cloud API access token                     |
-| WHATSAPP_PHONE_NUMBER_ID  | string                   | empty                                                  | Business phone number id                            |
-| WHATSAPP_VERIFY_TOKEN     | secret                   | empty                                                  | Webhook verification token                          |
-| WHATSAPP_APP_SECRET       | secret                   | empty                                                  | Used to verify webhook signatures                   |
-| WHATSAPP_ALLOWED_NUMBERS  | csv                      | empty                                                  | Allowed sender numbers                              |
-| WHATSAPP_GRAPH_VERSION    | string                   | v23.0                                                  | Graph API version                                   |
-| ELEVENLABS_API_KEY        | secret                   | empty                                                  | Enables voice synthesis                             |
-| ELEVENLABS_VOICE_ID       | string                   | empty                                                  | Voice used for replies                              |
-| ELEVENLABS_MODEL_ID       | string                   | eleven_multilingual_v2                                 | TTS model                                           |
-| VOICE_REPLIES_ALWAYS      | bool                     | false                                                  | Reply with voice even to text messages              |
-| STT_MODEL                 | string                   | whisper-1                                              | LiteLLM transcription model                         |
-| STT_API_KEY               | secret                   | empty                                                  | Transcription provider key                          |
-| BROWSER_HEADLESS          | bool                     | true                                                   | Run Chromium headless                               |
-| BROWSER_STATE_DIR         | path                     | ./.browser_state                                       | Saved login sessions                                |
-| BROWSER_ALLOWED_DOMAINS   | csv                      | instagram.com,tinder.com,linkedin.com,github.com       | Domains the browser may visit                       |
+| LLM_API_KEY               | secret                   | empty                                                  | API key for the native engine                                                                    |
+| HERMES_MODEL              | string                   | openai/hermes                                          | LiteLLM model name for a Hermes endpoint                                                         |
+| HERMES_API_BASE           | string                   | empty                                                  | OpenAI-compatible Hermes endpoint                                                                |
+| HERMES_API_KEY            | secret                   | empty                                                  | Hermes endpoint key                                                                              |
+| OPENCLAW_MODEL            | string                   | openai/openclaw                                        | LiteLLM model name for an OpenClaw endpoint                                                      |
+| OPENCLAW_API_BASE         | string                   | empty                                                  | OpenAI-compatible OpenClaw endpoint                                                              |
+| OPENCLAW_API_KEY          | secret                   | empty                                                  | OpenClaw endpoint key                                                                            |
+| TOOL_ROUTE_TOP_K          | int                      | 8                                                      | Tools loaded per detected app for each message                                                   |
+| TOOL_CACHE_TTL_SECONDS    | int                      | 3600                                                   | How long fetched tool lists are cached                                                           |
+| DATABASE_URL              | string                   | postgresql://omniclaw:omniclaw@localhost:5432/omniclaw | Postgres DSN                                                                                     |
+| POSTGRES_PASSWORD         | secret                   | change-me                                              | Used by docker compose for Postgres and the app DSN                                              |
+| MEM0_API_KEY              | secret                   | empty                                                  | Enables Mem0 semantic memory                                                                     |
+| R2_ACCOUNT_ID             | string                   | empty                                                  | Cloudflare account id                                                                            |
+| R2_ACCESS_KEY_ID          | secret                   | empty                                                  | R2 access key                                                                                    |
+| R2_SECRET_ACCESS_KEY      | secret                   | empty                                                  | R2 secret key                                                                                    |
+| R2_BUCKET                 | string                   | empty                                                  | R2 bucket for audio and screenshots                                                              |
+| COMPOSIO_API_KEY          | secret                   | empty                                                  | Enables Composio tools                                                                           |
+| COMPOSIO_BASE_URL         | string                   | https://backend.composio.dev                           | Composio API base                                                                                |
+| COMPOSIO_USER_ID          | string                   | default                                                | Must equal the user id on your ACTIVE Composio connected accounts                                |
+| NANGO_SECRET_KEY          | secret                   | empty                                                  | Enables the curated Nango tools and proxy tool                                                   |
+| NANGO_BASE_URL            | string                   | https://api.nango.dev                                  | Nango API base. Self-hosted from Docker: http://host.docker.internal:<port>                      |
+| NANGO_CONNECTION_ID       | string                   | empty                                                  | Preferred Nango connection id when several exist for a provider                                  |
+| TELEGRAM_BOT_TOKEN        | secret                   | empty                                                  | Enables the Telegram channel                                                                     |
+| TELEGRAM_ALLOWED_USER_IDS | csv                      | empty                                                  | Allowed Telegram user ids                                                                        |
+| WHATSAPP_TOKEN            | secret                   | empty                                                  | WhatsApp Cloud API access token                                                                  |
+| WHATSAPP_PHONE_NUMBER_ID  | string                   | empty                                                  | Business phone number id                                                                         |
+| WHATSAPP_VERIFY_TOKEN     | secret                   | empty                                                  | Webhook verification token                                                                       |
+| WHATSAPP_APP_SECRET       | secret                   | empty                                                  | Used to verify webhook signatures                                                                |
+| WHATSAPP_ALLOWED_NUMBERS  | csv                      | empty                                                  | Allowed sender numbers                                                                           |
+| WHATSAPP_GRAPH_VERSION    | string                   | v23.0                                                  | Graph API version                                                                                |
+| ELEVENLABS_API_KEY        | secret                   | empty                                                  | Enables voice synthesis                                                                          |
+| ELEVENLABS_VOICE_ID       | string                   | empty                                                  | Voice used for replies                                                                           |
+| ELEVENLABS_MODEL_ID       | string                   | eleven_multilingual_v2                                 | TTS model                                                                                        |
+| VOICE_REPLIES_ALWAYS      | bool                     | false                                                  | Reply with voice even to text messages                                                           |
+| STT_MODEL                 | string                   | whisper-1                                              | LiteLLM transcription model                                                                      |
+| STT_API_KEY               | secret                   | empty                                                  | Transcription provider key                                                                       |
+| BROWSER_HEADLESS          | bool                     | true                                                   | Run Chromium headless                                                                            |
+| BROWSER_STATE_DIR         | path                     | ./.browser_state                                       | Saved login sessions                                                                             |
+| BROWSER_ALLOWED_DOMAINS   | csv                      | instagram.com,tinder.com,linkedin.com,github.com       | Domains the browser may visit                                                                    |

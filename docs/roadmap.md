@@ -21,4 +21,5 @@
 * Third-party terms of service may restrict automation of some platforms.
 * Mem0 client API differences between versions.
 * Telegram currently receives plain text only. Rich formatting (parse_mode) is not enabled.
-* Connector setup errors are the most common support issue. A `doctor` command that checks LLM, database and connector reachability is planned.
+* Connector setup errors are the most common support issue. A `doctor` command that checks LLM, database and connector
+  reachability is planned.

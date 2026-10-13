@@ -100,8 +100,8 @@ in another Docker network, use its service name or host IP instead.
 
 ### Nango rules that are easy to miss
 
-* Curated tools exist only for GitHub, Gmail, Google Calendar and Slack
-  (`src/omniclaw/nango_tools.py`). Other providers work only through the generic
+* Curated tools exist only for GitHub, Gmail, Google Calendar and Slack (`src/omniclaw/nango_tools.py`). Other providers
+  work only through the generic
   `nango_request` tool.
 * Your Nango integrations must use these provider ids: `github`, `google-mail`,
   `google-calendar`, `slack`. If you use others, edit `PROVIDERS` in `nango_tools.py`.

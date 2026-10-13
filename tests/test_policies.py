@@ -10,6 +10,7 @@ from omniclaw.connectors import composio_needs_approval, nango_needs_approval
 def test_settings_parse_csv_lists():
     settings = Settings(
         _env_file=None,
+        telegram_bot_token="",
         telegram_allowed_user_ids="1, 2",
         browser_allowed_domains="Instagram.com, tinder.com",
     )
