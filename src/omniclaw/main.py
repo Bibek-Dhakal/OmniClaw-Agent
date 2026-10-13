@@ -123,7 +123,15 @@ async def run() -> None:
     )
     try:
         if catalog.enabled:
-            log.info("Connected apps: %s", await catalog.connected() or "unknown")
+            apps = await catalog.connected()
+            if apps:
+                log.info("Connected apps: %s", apps)
+            else:
+                log.warning(
+                    "No connected apps found. Check that COMPOSIO_USER_ID matches the user id on "
+                    "your ACTIVE Composio connected accounts, or that your Nango connections "
+                    "exist (see docs/troubleshooting.md). Keyword routing still works."
+                )
         if telegram is not None:
             await telegram.start()
         log.info("OmniClaw started (engine=%s)", settings.agent_engine)

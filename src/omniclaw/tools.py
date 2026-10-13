@@ -11,7 +11,7 @@ from omniclaw.models import Notify
 
 log = logging.getLogger(__name__)
 
-MAX_RESULT_CHARS = 8000
+MAX_RESULT_CHARS = 12000
 LogAction = Callable[[str, str, str, str, bool, str], Awaitable[None]]
 
 
@@ -102,7 +102,9 @@ class ToolRegistry:
             ok = False
             result = {"error": f"{type(exc).__name__}: {exc}"}
 
-        text = to_json(result)[:MAX_RESULT_CHARS]
+        text = to_json(result)
+        if len(text) > MAX_RESULT_CHARS:
+            text = text[:MAX_RESULT_CHARS] + " ...[truncated]"
         try:
             await self._log_action(ctx.channel, ctx.chat_id, name, to_json(args), ok, text[:2000])
         except Exception:

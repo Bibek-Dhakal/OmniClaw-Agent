@@ -1,5 +1,8 @@
 # Usage
 
+First time here? Follow the [Setup guide](setup.md). Having trouble? See
+[Troubleshooting](troubleshooting.md).
+
 ## Commands
 
 ```bash
@@ -42,6 +45,11 @@ Providers follow your environment. Set `COMPOSIO_API_KEY` to use the Composio to
 use the curated Nango tools (GitHub, Gmail, Google Calendar, Slack) defined in `src/omniclaw/nango_tools.py`. If both
 are set, both are used. Tool lists are cached for `TOOL_CACHE_TTL_SECONDS`.
 
+Ranking prefers read tools unless your message contains a write verb (send, create, delete and
+so on), and deprecated Composio tools are skipped. Tool results are compacted (nulls, API-style
+`*_url` fields and long strings removed) so lists are not cut off. If a result is still too
+long it ends with `[truncated]` and the agent tells you the list may be incomplete.
+
 ## Approvals
 
 Tools that send, post or modify are held until the owner replies YES (or NO) in the same chat. The system automatically
@@ -64,8 +72,8 @@ CREATE, DELETE, UPDATE and similar). Nango GET calls run without approval, other
 | APPROVAL_REQUIRED         | bool                     | true                                                   | Require owner approval for risky tools              |
 | APPROVAL_TIMEOUT_SECONDS  | int                      | 300                                                    | Approval wait time before rejection                 |
 | AGENT_ENGINE              | native, hermes, openclaw | native                                                 | Which engine profile is used                        |
-| LLM_MODEL                 | string                   | gemini/gemini-3.8-flash                                | LiteLLM model for the native engine                 |
-| LLM_API_BASE              | string                   | empty                                                  | Optional API base for the native engine             |
+| LLM_MODEL                 | string                   | gemini/gemini-3.8-flash                                | LiteLLM model, for example gemini/..., or openai/<name> for an OpenAI-compatible server |
+| LLM_API_BASE              | string                   | empty                                                  | Custom endpoint, for example http://host.docker.internal:8000/v1 (never localhost inside Docker) |
 | LLM_API_KEY               | secret                   | empty                                                  | API key for the native engine                       |
 | HERMES_MODEL              | string                   | openai/hermes                                          | LiteLLM model name for a Hermes endpoint            |
 | HERMES_API_BASE           | string                   | empty                                                  | OpenAI-compatible Hermes endpoint                   |
@@ -84,10 +92,10 @@ CREATE, DELETE, UPDATE and similar). Nango GET calls run without approval, other
 | R2_BUCKET                 | string                   | empty                                                  | R2 bucket for audio and screenshots                 |
 | COMPOSIO_API_KEY          | secret                   | empty                                                  | Enables Composio tools                              |
 | COMPOSIO_BASE_URL         | string                   | https://backend.composio.dev                           | Composio API base                                   |
-| COMPOSIO_USER_ID          | string                   | default                                                | Composio entity or user id                          |
+| COMPOSIO_USER_ID          | string                   | default                                                | Must equal the user id on your ACTIVE Composio connected accounts |
 | NANGO_SECRET_KEY          | secret                   | empty                                                  | Enables the curated Nango tools and proxy tool      |
-| NANGO_BASE_URL            | string                   | https://api.nango.dev                                  | Nango API base (change if self-hosting Nango)       |
-| NANGO_CONNECTION_ID       | string                   | empty                                                  | Preferred Nango connection id                       |
+| NANGO_BASE_URL            | string                   | https://api.nango.dev                                  | Nango API base. Self-hosted from Docker: http://host.docker.internal:<port> |
+| NANGO_CONNECTION_ID       | string                   | empty                                                  | Preferred Nango connection id when several exist for a provider |
 | TELEGRAM_BOT_TOKEN        | secret                   | empty                                                  | Enables the Telegram channel                        |
 | TELEGRAM_ALLOWED_USER_IDS | csv                      | empty                                                  | Allowed Telegram user ids                           |
 | WHATSAPP_TOKEN            | secret                   | empty                                                  | WhatsApp Cloud API access token                     |

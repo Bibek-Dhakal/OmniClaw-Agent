@@ -126,6 +126,43 @@ def nango_describe(args: dict[str, Any]) -> str:
     return f"Make a {method} request to {path}"
 
 
+_KEEP_URL_KEYS = frozenset({"html_url", "web_url", "download_url", "permalink"})
+MAX_STRING_CHARS = 500
+
+
+def compact(value: Any) -> Any:
+    """Shrink API payloads so lists are not cut off mid-JSON.
+
+    Drops nulls, empty values, node ids and API-style *_url fields (keeps human links),
+    and truncates very long strings.
+    """
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            name = str(key)
+            if item in (None, "", [], {}) or name == "node_id":
+                continue
+            if name.endswith("_url") and name not in _KEEP_URL_KEYS:
+                continue
+            out[name] = compact(item)
+        return out
+    if isinstance(value, list):
+        return [compact(item) for item in value]
+    if isinstance(value, str) and len(value) > MAX_STRING_CHARS:
+        return value[:MAX_STRING_CHARS] + "…"
+    return value
+
+
+def live_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Prefer maintained tools. Fall back to deprecated ones only if nothing else exists."""
+    live = [
+        item
+        for item in items
+        if not str(item.get("description") or "").lower().startswith("deprecated")
+    ]
+    return live or items
+
+
 class ComposioProvider:
     """Composio tools. Each tool carries its real input schema so the model gets arguments right."""
 
@@ -190,7 +227,7 @@ class ComposioProvider:
                 more = len(batch) >= COMPOSIO_PAGE_SIZE
             if not new or not more:
                 break
-        return [self._tool(item) for item in found.values()]
+        return [self._tool(item) for item in live_items(list(found.values()))]
 
     async def execute(self, slug: str, arguments: dict[str, Any]) -> Any:
         response = await self._http.post(
@@ -199,8 +236,17 @@ class ComposioProvider:
             json={"user_id": self._s.composio_user_id, "arguments": arguments},
         )
         if not response.is_success:
+            if "ConnectedAccountNotFound" in response.text:
+                return {
+                    "error": "No connected account for this app under the configured user id.",
+                    "hint": (
+                        f"COMPOSIO_USER_ID is '{self._s.composio_user_id}'. It must equal the "
+                        "user id shown on the connected account in the Composio dashboard, "
+                        "and the account must be ACTIVE. Tell the owner; do not retry."
+                    ),
+                }
             return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
-        return response.json()
+        return compact(response.json())
 
     def _tool(self, item: dict[str, Any]) -> Tool:
         slug = str(item["slug"])

@@ -46,7 +46,7 @@ sequenceDiagram
 | `tools.py` | Tool registry, approval gate, action logging |
 | `approvals.py` | YES/NO approval broker |
 | `catalog.py` | Intent routing, BM25 tool ranking, schema cleanup, `find_tools` |
-| `connectors.py` | Composio provider and the generic Nango proxy tool |
+| `connectors.py` | Composio provider (skips deprecated tools, compacts results) and the generic Nango proxy tool |
 | `nango_tools.py` | Curated Nango tools (GitHub, Gmail, Google Calendar, Slack) |
 | `browser.py` | Playwright session manager and browser tools |
 | `memory.py` | Postgres, Mem0 and R2 stores |
@@ -64,6 +64,10 @@ sequenceDiagram
 * Outbound or irreversible actions pass through the approval broker before the handler runs.
 * A per-chat lock serializes turns. Approval replies bypass the lock so they can resolve a waiting tool call.
 * Memory failures degrade gracefully and never block a reply.
+* Ranking is read-biased: write tools are demoted unless the user's words contain a write verb.
+* API results are compacted before reaching the model. Oversized results end with `[truncated]`
+  so the agent never presents a cut-off list as complete.
+* Startup logs the connected apps and warns when none are found (usually a user id mismatch).
 
 ## Data model
 

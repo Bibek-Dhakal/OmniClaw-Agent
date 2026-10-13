@@ -3,6 +3,7 @@
 ## Tiers
 
 * **Unit**: config parsing, domain allowlist, approval policy, webhook signature and payload parsing.
+* **Unit** also covers tool ranking and read/write bias, schema cleanup, deprecated-tool filtering and result compaction.
 * **Component**: the engine tool loop with a faked `acompletion`, and the approval gate with a real broker.
 * **Manual end-to-end**: Telegram, WhatsApp, connectors, voice and browser flows against real accounts.
 

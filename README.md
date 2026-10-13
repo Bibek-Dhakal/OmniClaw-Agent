@@ -26,15 +26,21 @@ Telegram / WhatsApp (text or voice)
 ## Quick start
 
 ```bash
-cp .env.example .env     # fill in the values you need
+cp .env.example .env     # set LLM_MODEL/LLM_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_IDS
 docker compose up --build
 ```
+
+Look for `Connected apps: [...]` and `OmniClaw started` in the logs, then message your bot.
+Connectors (Composio or Nango) are optional. The full step-by-step guide, including the
+`COMPOSIO_USER_ID` and self-hosted Nango details, is in [docs/setup.md](docs/setup.md).
 
 Health check: `http://localhost:8080/healthz`
 Web Logs Dashboard: `http://localhost:8080/logs`
 
 ## Documentation
 
+* [Setup guide](docs/setup.md)
+* [Troubleshooting](docs/troubleshooting.md)
 * [Usage and configuration](docs/usage.md)
 * [Architecture](docs/architecture.md)
 * [Testing](docs/testing.md)

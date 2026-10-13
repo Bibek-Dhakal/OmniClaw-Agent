@@ -167,3 +167,26 @@ async def test_nango_catalog_exposes_curated_tools():
     assert "github_list_my_repos" in {tool.name for tool in tools}
     assert all(tool.parameters["type"] == "object" for tool in tools)
     assert await provider.load("unknown") == []
+
+
+def test_rank_demotes_write_tools_for_read_queries():
+    entries = [
+        make_entry(_tool("GITHUB_UPDATE_A_REPOSITORY", "Update a repository"), "github"),
+        make_entry(
+            _tool(
+                "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER",
+                "List repositories for the authenticated user",
+            ),
+            "github",
+        ),
+    ]
+    best = rank("list my most recently updated repos", entries, 2)
+    assert best[0].tool.name == "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER"
+
+
+def test_rank_keeps_write_tools_for_write_queries():
+    entries = [
+        make_entry(_tool("github_create_issue", "Create an issue"), "github"),
+        make_entry(_tool("github_list_issues", "List issues"), "github"),
+    ]
+    assert rank("create an issue", entries, 1)[0].tool.name == "github_create_issue"

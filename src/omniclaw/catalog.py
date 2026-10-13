@@ -144,6 +144,58 @@ _SYNONYMS = {
     "newest": "update",
 }
 
+# Tool-name verbs. Used to demote write tools when the user's words show no write intent.
+_WRITE_WORDS = frozenset(
+    {
+        "send",
+        "create",
+        "add",
+        "delete",
+        "remove",
+        "post",
+        "reply",
+        "forward",
+        "merge",
+        "close",
+        "schedule",
+        "edit",
+        "rename",
+        "comment",
+        "assign",
+        "invite",
+        "cancel",
+        "write",
+        "modify",
+        "change",
+        "update",
+        "set",
+        "upload",
+        "publish",
+        "move",
+        "archive",
+        "fork",
+        "star",
+    }
+)
+_READ_WORDS = frozenset(
+    {
+        "list",
+        "get",
+        "fetch",
+        "search",
+        "find",
+        "read",
+        "retrieve",
+        "view",
+        "lookup",
+        "count",
+        "check",
+        "query",
+    }
+)
+_WRITE_PENALTY = 0.3
+_READ_BONUS = 1.25
+
 
 def _stem(word: str) -> str:
     for suffix, replacement in (
@@ -188,10 +240,15 @@ def make_entry(tool: Tool, toolkit: str) -> Entry:
 
 
 def rank(query: str, entries: list[Entry], k: int) -> list[Entry]:
-    """BM25 ranking. Any query word can match, so 'list repos' finds 'repositories'."""
+    """BM25 ranking. Any query word can match, so 'list repos' finds 'repositories'.
+
+    Write tools are demoted unless the raw query contains a write verb. Raw words are checked
+    (not stemmed tokens) because 'recently' is mapped to 'update' for matching purposes.
+    """
     terms = set(tokenize(query))
     if not terms or not entries:
         return []
+    wants_write = bool(set(_WORD.findall(query.lower())) & _WRITE_WORDS)
     total = len(entries)
     average = (sum(len(entry.tokens) for entry in entries) / total) or 1.0
     doc_freq: Counter[str] = Counter()
@@ -211,6 +268,12 @@ def rank(query: str, entries: list[Entry], k: int) -> list[Entry]:
             norm = tf + _BM25_K1 * (1 - _BM25_B + _BM25_B * length / average)
             score += idf * tf * (_BM25_K1 + 1) / norm
         if score > 0:
+            if not wants_write:
+                words = set(re.split(r"[^a-z0-9]+", entry.tool.name.lower()))
+                if words & _WRITE_WORDS:
+                    score *= _WRITE_PENALTY
+                elif words & _READ_WORDS:
+                    score *= _READ_BONUS
             scored.append((score, entry))
     scored.sort(key=lambda pair: pair[0], reverse=True)
     return [entry for _, entry in scored[:k]]
