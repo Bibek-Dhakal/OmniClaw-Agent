@@ -12,10 +12,11 @@ from fastapi.responses import HTMLResponse
 
 from omniclaw.approvals import ApprovalBroker
 from omniclaw.browser import BrowserManager, build_browser_tools, interactive_login
+from omniclaw.catalog import ToolCatalog
 from omniclaw.channels.telegram import TelegramChannel
 from omniclaw.channels.whatsapp import WhatsAppChannel
 from omniclaw.config import get_settings
-from omniclaw.connectors import build_connector_tools
+from omniclaw.connectors import build_connector_tools, build_providers
 from omniclaw.engine import AgentEngine
 from omniclaw.memory import Mem0Store, PostgresStore, R2Store
 from omniclaw.orchestrator import Orchestrator
@@ -43,12 +44,21 @@ async def run() -> None:
     r2 = R2Store(settings)
     broker = ApprovalBroker(settings.approval_timeout_seconds)
     browser = BrowserManager(settings)
+    catalog = ToolCatalog(
+        build_providers(settings, http),
+        settings.tool_cache_ttl_seconds,
+        settings.tool_route_top_k,
+    )
 
     registry = ToolRegistry(broker, store.log_action, settings.approval_required)
     registry.register(*build_connector_tools(settings, http), *build_browser_tools(browser, r2))
+    if catalog.enabled:
+        registry.register(catalog.find_tools_tool())
 
     engine = AgentEngine(settings.engine_profile(), registry, settings.max_agent_steps)
-    orchestrator = Orchestrator(settings, engine, store, memory, r2, Voice(settings, http), broker)
+    orchestrator = Orchestrator(
+        settings, engine, store, memory, r2, Voice(settings, http), broker, catalog
+    )
 
     app = FastAPI(title="OmniClaw Agent")
 
@@ -112,6 +122,8 @@ async def run() -> None:
         )
     )
     try:
+        if catalog.enabled:
+            log.info("Connected apps: %s", await catalog.connected() or "unknown")
         if telegram is not None:
             await telegram.start()
         log.info("OmniClaw started (engine=%s)", settings.agent_engine)

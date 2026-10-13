@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     port: int = 8080
     owner_name: str = "Owner"
     memory_user_id: str = "owner"
-    max_agent_steps: int = 8
+    max_agent_steps: int = 12
     history_turns: int = 12
     approval_required: bool = True
     approval_timeout_seconds: int = 300
@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     openclaw_model: str = "openai/openclaw"
     openclaw_api_base: str = ""
     openclaw_api_key: SecretStr = SecretStr("")
+
+    # Tool discovery
+    tool_route_top_k: int = 8
+    tool_cache_ttl_seconds: int = 3600
 
     # Storage
     database_url: str = "postgresql://omniclaw:omniclaw@localhost:5432/omniclaw"

@@ -3,7 +3,7 @@
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from omniclaw.approvals import ApprovalBroker
@@ -24,6 +24,8 @@ class ToolContext:
     channel: str
     chat_id: str
     notify: Notify
+    # Tools discovered during this request. They are exposed to the model on the next step.
+    dynamic: dict[str, "Tool"] = field(default_factory=dict, compare=False)
 
     @property
     def key(self) -> str:
@@ -70,11 +72,16 @@ class ToolRegistry:
         for tool in tools:
             self._tools[tool.name] = tool
 
-    def specs(self) -> list[dict[str, Any]]:
-        return [tool.spec() for tool in self._tools.values()]
+    def specs(self, ctx: ToolContext | None = None) -> list[dict[str, Any]]:
+        """Static tools plus any tools discovered during this request."""
+        tools = dict(self._tools)
+        if ctx is not None:
+            for name, tool in ctx.dynamic.items():
+                tools.setdefault(name, tool)
+        return [tool.spec() for tool in tools.values()]
 
     async def call(self, name: str, args: dict[str, Any], ctx: ToolContext) -> str:
-        tool = self._tools.get(name)
+        tool = self._tools.get(name) or ctx.dynamic.get(name)
         if tool is None:
             return to_json({"error": f"Unknown tool: {name}"})
 

@@ -25,12 +25,30 @@ While the app is running, open your web browser and navigate to:
 * WhatsApp needs all four of `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` and
   `WHATSAPP_APP_SECRET`. Set the Meta webhook callback to `https://<host>/webhook/whatsapp`.
 
+## Tool discovery
+
+The agent does not explore tools inside its loop. For every message the tool catalog does the following first:
+
+1. Finds the connected apps (Composio connected accounts, or Nango connections).
+2. Detects which app or apps the message is about (for example GitHub, Gmail, Calendar, Slack, or a mix).
+3. Ranks that app's tools against the message and loads the top `TOOL_ROUTE_TOP_K` as real function-calling tools with
+   full parameter schemas, so the model can call them directly.
+4. Chat-only messages load no tools.
+
+If no loaded tool fits, the model calls `find_tools` once with a plain-language goal. The matches are loaded and become
+callable on the next step.
+
+Providers follow your environment. Set `COMPOSIO_API_KEY` to use the Composio tool catalog. Set `NANGO_SECRET_KEY` to
+use the curated Nango tools (GitHub, Gmail, Google Calendar, Slack) defined in `src/omniclaw/nango_tools.py`. If both
+are set, both are used. Tool lists are cached for `TOOL_CACHE_TTL_SECONDS`.
+
 ## Approvals
 
 Tools that send, post or modify are held until the owner replies YES (or NO) in the same chat. The system automatically
-translates complex API payloads into human-readable summaries before asking for approval. Read-only Composio tools (slug
-contains FETCH, LIST, GET, SEARCH, FIND or READ) and GET Nango calls run without approval. Set `APPROVAL_REQUIRED=false`
-to disable the gate.
+translates complex API payloads into human-readable summaries before asking for approval. Composio tools run without
+approval only when the slug has a read verb (FETCH, LIST, GET, SEARCH, FIND, READ and similar) and no write verb (SEND,
+CREATE, DELETE, UPDATE and similar). Nango GET calls run without approval, other methods are held. Set
+`APPROVAL_REQUIRED=false` to disable the gate.
 
 ## Environment variables
 
@@ -41,7 +59,7 @@ to disable the gate.
 | PORT                      | int                      | 8080                                                   | Webhook server port                                 |
 | OWNER_NAME                | string                   | Owner                                                  | Name used in the system prompt                      |
 | MEMORY_USER_ID            | string                   | owner                                                  | Mem0 user id, shared across channels                |
-| MAX_AGENT_STEPS           | int                      | 15                                                     | Maximum tool-call rounds per request                |
+| MAX_AGENT_STEPS           | int                      | 12                                                     | Maximum tool-call rounds per request                |
 | HISTORY_TURNS             | int                      | 12                                                     | Conversation turns loaded from Postgres             |
 | APPROVAL_REQUIRED         | bool                     | true                                                   | Require owner approval for risky tools              |
 | APPROVAL_TIMEOUT_SECONDS  | int                      | 300                                                    | Approval wait time before rejection                 |
@@ -55,6 +73,8 @@ to disable the gate.
 | OPENCLAW_MODEL            | string                   | openai/openclaw                                        | LiteLLM model name for an OpenClaw endpoint         |
 | OPENCLAW_API_BASE         | string                   | empty                                                  | OpenAI-compatible OpenClaw endpoint                 |
 | OPENCLAW_API_KEY          | secret                   | empty                                                  | OpenClaw endpoint key                               |
+| TOOL_ROUTE_TOP_K          | int                      | 8                                                      | Tools loaded per detected app for each message      |
+| TOOL_CACHE_TTL_SECONDS    | int                      | 3600                                                   | How long fetched tool lists are cached              |
 | DATABASE_URL              | string                   | postgresql://omniclaw:omniclaw@localhost:5432/omniclaw | Postgres DSN                                        |
 | POSTGRES_PASSWORD         | secret                   | change-me                                              | Used by docker compose for Postgres and the app DSN |
 | MEM0_API_KEY              | secret                   | empty                                                  | Enables Mem0 semantic memory                        |
@@ -65,9 +85,9 @@ to disable the gate.
 | COMPOSIO_API_KEY          | secret                   | empty                                                  | Enables Composio tools                              |
 | COMPOSIO_BASE_URL         | string                   | https://backend.composio.dev                           | Composio API base                                   |
 | COMPOSIO_USER_ID          | string                   | default                                                | Composio entity or user id                          |
-| NANGO_SECRET_KEY          | secret                   | empty                                                  | Enables Nango proxy tool                            |
+| NANGO_SECRET_KEY          | secret                   | empty                                                  | Enables the curated Nango tools and proxy tool      |
 | NANGO_BASE_URL            | string                   | https://api.nango.dev                                  | Nango API base (change if self-hosting Nango)       |
-| NANGO_CONNECTION_ID       | string                   | empty                                                  | Default Nango connection id                         |
+| NANGO_CONNECTION_ID       | string                   | empty                                                  | Preferred Nango connection id                       |
 | TELEGRAM_BOT_TOKEN        | secret                   | empty                                                  | Enables the Telegram channel                        |
 | TELEGRAM_ALLOWED_USER_IDS | csv                      | empty                                                  | Allowed Telegram user ids                           |
 | WHATSAPP_TOKEN            | secret                   | empty                                                  | WhatsApp Cloud API access token                     |

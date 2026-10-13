@@ -1,4 +1,4 @@
-"""Per-message pipeline: transcribe, approve, recall, run engine, persist, voice."""
+"""Per-message pipeline: transcribe, approve, recall, route tools, run engine, persist, voice."""
 
 import asyncio
 import logging
@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from omniclaw.approvals import ApprovalBroker
+from omniclaw.catalog import ToolCatalog
 from omniclaw.config import Settings
 from omniclaw.engine import AgentEngine
 from omniclaw.memory import Mem0Store, PostgresStore, R2Store
@@ -22,21 +23,31 @@ ERROR_REPLY = "Something went wrong while handling that. Check the logs and try 
 VOICE_ERROR_REPLY = "I could not process that voice message."
 
 
-def build_system_prompt(owner: str, memories: list[str]) -> str:
+def build_system_prompt(owner: str, memories: list[str], connected: list[str] | None = None) -> str:
     memory_block = "\n".join(f"- {m}" for m in memories) if memories else "- (none)"
+    apps = ", ".join(connected) if connected else "unknown"
     return (
         f"You are OmniClaw, the executive assistant of {owner}. "
         f"Current UTC time: {datetime.now(UTC).isoformat(timespec='minutes')}.\n"
         "Use tools to read mail, calendar and social platforms and to take actions. "
         "Never claim an action succeeded unless a tool result confirms it. "
         "CRITICAL TOOL RULES: "
-        "1. If using Composio, NEVER guess tool slugs. ALWAYS call composio_list_tools with a query to find the exact slug before calling composio_execute. "
-        "2. Assume the user is already authenticated to all platforms. NEVER call INITIATE_CONNECTION tools. "
-        "Prefer connector tools (Composio, Nango) over the browser; use the browser only for "
+        "1. Tools relevant to the request are usually already loaded. Call them directly, use the "
+        "exact argument names from their schemas, and pick sensible values yourself instead of "
+        "asking the owner. "
+        "2. If no loaded tool fits, call find_tools ONCE with a short plain-language goal (add "
+        "toolkit when you know it, for example github, gmail, googlecalendar, slack). It loads "
+        "matching tools that you can call on the next step. NEVER guess tool names. "
+        "3. Assume the owner is already authenticated to every connected app. NEVER call "
+        "INITIATE_CONNECTION tools. If an app is not connected, say so. "
+        "4. If a tool fails, fix the arguments once. Do not repeat the same failing call. "
+        "5. Chat, advice and general questions need no tools. "
+        "Prefer connector tools over the browser; use the browser only for "
         "apps without usable APIs. Messages sent to third parties go out under the owner's "
         "name: draft them in the owner's tone and keep them honest. "
         "Sending and posting require owner approval; if an action is rejected, do not retry it. "
         "Keep answers concise and easy to hear when read aloud.\n"
+        f"Connected apps: {apps}.\n"
         f"Relevant long-term memories:\n{memory_block}"
     )
 
@@ -51,6 +62,7 @@ class Orchestrator:
         r2: R2Store,
         voice: Voice,
         broker: ApprovalBroker,
+        catalog: ToolCatalog,
     ) -> None:
         self._s = settings
         self._engine = engine
@@ -59,6 +71,7 @@ class Orchestrator:
         self._r2 = r2
         self._voice = voice
         self._broker = broker
+        self._catalog = catalog
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._background: set[asyncio.Task[Any]] = set()
 
@@ -111,12 +124,19 @@ class Orchestrator:
         history = await self._store.recent(
             inbound.channel, inbound.chat_id, self._s.history_turns * 2
         )
+
+        ctx = ToolContext(inbound.channel, inbound.chat_id, notify)
+        previous = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
+        route = await self._catalog.route(text, ctx, previous)
+
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": build_system_prompt(self._s.owner_name, memories)},
+            {
+                "role": "system",
+                "content": build_system_prompt(self._s.owner_name, memories, route.connected),
+            },
             *history,
             {"role": "user", "content": text},
         ]
-        ctx = ToolContext(inbound.channel, inbound.chat_id, notify)
         reply = await self._engine.run(messages, ctx) or "Done."
 
         await self._store.add(inbound.channel, inbound.chat_id, "user", text)

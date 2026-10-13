@@ -1,26 +1,118 @@
-"""Connector tools: Composio (tool execution) and Nango (authenticated API proxy)."""
+"""Connector layer: Composio (hosted tool catalog) and Nango (curated tools, see nango_tools.py)."""
 
+import logging
 import re
 from typing import Any
 
 import httpx
 
+from omniclaw.catalog import ToolProvider, clean_parameters
 from omniclaw.config import Settings
+from omniclaw.nango_tools import NangoProvider
 from omniclaw.tools import Tool, ToolContext
 
-_READ_ONLY = re.compile(r"FETCH|LIST|GET|SEARCH|FIND|READ", re.IGNORECASE)
+log = logging.getLogger(__name__)
+
+COMPOSIO_PAGE_SIZE = 100
+COMPOSIO_MAX_PAGES = 12
+
+_READ_VERBS = frozenset(
+    {
+        "FETCH",
+        "LIST",
+        "GET",
+        "SEARCH",
+        "FIND",
+        "READ",
+        "RETRIEVE",
+        "VIEW",
+        "LOOKUP",
+        "COUNT",
+        "CHECK",
+        "QUERY",
+    }
+)
+_WRITE_VERBS = frozenset(
+    {
+        "SEND",
+        "CREATE",
+        "DELETE",
+        "UPDATE",
+        "POST",
+        "ADD",
+        "REMOVE",
+        "REPLY",
+        "FORWARD",
+        "PATCH",
+        "MODIFY",
+        "MOVE",
+        "INSERT",
+        "EDIT",
+        "TRASH",
+        "ARCHIVE",
+        "STAR",
+        "UNSTAR",
+        "MERGE",
+        "CLOSE",
+        "REOPEN",
+        "ASSIGN",
+        "LIKE",
+        "FOLLOW",
+        "UNFOLLOW",
+        "COMMENT",
+        "SET",
+        "UPLOAD",
+        "PUBLISH",
+        "SCHEDULE",
+        "INVITE",
+        "ACCEPT",
+        "DECLINE",
+        "SUBMIT",
+        "CONNECT",
+        "DISCONNECT",
+        "INITIATE",
+        "FORK",
+        "REVOKE",
+        "CANCEL",
+        "EXECUTE",
+        "RUN",
+        "TRIGGER",
+        "SUBSCRIBE",
+        "UNSUBSCRIBE",
+        "APPEND",
+        "WRITE",
+        "SWIPE",
+        "PIN",
+        "UNPIN",
+        "REACT",
+        "REPLACE",
+        "RENAME",
+        "COPY",
+        "SHARE",
+        "TRANSFER",
+        "LOCK",
+        "UNLOCK",
+        "ENABLE",
+        "DISABLE",
+    }
+)
 
 
 def composio_needs_approval(args: dict[str, Any]) -> bool:
-    """Anything that is not clearly a read needs owner approval."""
-    return not _READ_ONLY.search(str(args.get("tool_slug", "")))
+    """Only clearly read-only slugs skip approval. Any write verb always needs the owner."""
+    tokens = set(re.split(r"[^A-Z0-9]+", str(args.get("tool_slug", "")).upper()))
+    if tokens & _WRITE_VERBS:
+        return True
+    return not (tokens & _READ_VERBS)
 
 
 def composio_describe(args: dict[str, Any]) -> str:
     """Make the approval prompt for Composio human-readable instead of raw JSON."""
     slug = args.get("tool_slug", "Unknown Action")
-    kwargs = args.get("arguments", {})
-    return f"Use '{slug}'\nDetails: {kwargs}"
+    arguments = args.get("arguments") or {}
+    lines = [f"Run {slug}"]
+    lines.extend(f"- {key}: {str(value)[:300]}" for key, value in arguments.items())
+    return "\n".join(lines)
 
 
 def nango_needs_approval(args: dict[str, Any]) -> bool:
@@ -34,124 +126,112 @@ def nango_describe(args: dict[str, Any]) -> str:
     return f"Make a {method} request to {path}"
 
 
-def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[Tool]:
-    tools: list[Tool] = []
+class ComposioProvider:
+    """Composio tools. Each tool carries its real input schema so the model gets arguments right."""
 
-    composio_key = settings.composio_api_key.get_secret_value()
-    if composio_key:
-        base = settings.composio_base_url.rstrip("/")
-        headers = {"x-api-key": composio_key}
+    name = "composio"
 
-        async def composio_list_tools(args: dict[str, Any], ctx: ToolContext) -> Any:
-            items = []
-            page = 1
+    def __init__(self, settings: Settings, http: httpx.AsyncClient) -> None:
+        self._s = settings
+        self._http = http
+        self._base = settings.composio_base_url.rstrip("/")
+        self._headers = {"x-api-key": settings.composio_api_key.get_secret_value()}
 
-            # Paginate through the Composio API to ensure we get ALL tools for massive APIs like GitHub
-            while True:
-                response = await http.get(
-                    f"{base}/api/v3/tools",
-                    headers=headers,
-                    params={"toolkit_slug": args["toolkit"], "limit": 100, "page": page},
-                )
-                if not response.is_success:
-                    if not items:
-                        return {
-                            "error": f"HTTP {response.status_code}",
-                            "body": response.text[:2000],
-                        }
-                    break
+    async def toolkits(self) -> list[str]:
+        """Toolkits with an active connected account. Empty means unknown."""
+        try:
+            response = await self._http.get(
+                f"{self._base}/api/v3/connected_accounts",
+                headers=self._headers,
+                params={"user_ids": self._s.composio_user_id, "statuses": "ACTIVE", "limit": 100},
+            )
+        except httpx.HTTPError:
+            log.warning("Composio connected accounts request failed", exc_info=True)
+            return []
+        if not response.is_success:
+            log.warning("Composio connected accounts HTTP %s", response.status_code)
+            return []
+        names: list[str] = []
+        for item in response.json().get("items", []):
+            slug = str((item.get("toolkit") or {}).get("slug") or "").lower()
+            if slug and slug not in names:
+                names.append(slug)
+        return names
 
-                page_items = response.json().get("items", [])
-                if not page_items:
-                    break
-
-                items.extend(page_items)
-                if len(page_items) < 100:
-                    break
-
-                page += 1
-                if page > 20:  # Safety limit to prevent infinite loops (2000 tools max)
-                    break
-
-            # Smart Multi-Word Fuzzy Search
-            # Splits "list repos" into ["list", "repos"] and ensures ALL words are present
-            raw_query = args.get("query", "").lower()
-            query_words = [w.strip() for w in raw_query.split() if w.strip()]
-
-            results = []
-            for item in items:
-                slug = (item.get("slug") or "").lower()
-                desc = (item.get("description") or "").lower()
-                search_text = f"{slug} {desc}"
-
-                # If agent provided a search query, ensure ALL words are in the text
-                if query_words and not all(word in search_text for word in query_words):
-                    continue
-
-                results.append(
-                    {"slug": item.get("slug"), "description": (item.get("description") or "")[:200]}
-                )
-
-            if not results:
-                return {
-                    "error": f"No tools found matching '{raw_query}'. Try broader keywords like 'list', 'get', or 'create'."
-                }
-
-            # Return max 50 to keep the LLM context clean
-            return results[:50]
-
-        async def composio_execute(args: dict[str, Any], ctx: ToolContext) -> Any:
-            response = await http.post(
-                f"{base}/api/v3/tools/execute/{args['tool_slug']}",
-                headers=headers,
-                json={"user_id": settings.composio_user_id, "arguments": args.get("arguments", {})},
+    async def load(self, toolkit: str) -> list[Tool]:
+        found: dict[str, dict[str, Any]] = {}
+        cursor: str | None = None
+        for page in range(1, COMPOSIO_MAX_PAGES + 1):
+            params: dict[str, Any] = {
+                "toolkit_slug": toolkit,
+                "limit": COMPOSIO_PAGE_SIZE,
+                "page": page,
+            }
+            if cursor:
+                params["cursor"] = cursor
+            response = await self._http.get(
+                f"{self._base}/api/v3/tools", headers=self._headers, params=params
             )
             if not response.is_success:
-                return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
-            return response.json()
+                if found:
+                    break
+                raise RuntimeError(
+                    f"Composio tools HTTP {response.status_code}: {response.text[:300]}"
+                )
+            data = response.json()
+            batch = [item for item in data.get("items", []) if item.get("slug")]
+            new = [item for item in batch if item["slug"] not in found]
+            for item in new:
+                found[item["slug"]] = item
+            cursor = data.get("next_cursor")
+            total_pages = data.get("total_pages") or 0
+            more = bool(cursor) or page < total_pages
+            if not total_pages and not cursor:
+                more = len(batch) >= COMPOSIO_PAGE_SIZE
+            if not new or not more:
+                break
+        return [self._tool(item) for item in found.values()]
 
-        tools.append(
-            Tool(
-                name="composio_list_tools",
-                description=(
-                    "List available Composio tool slugs for a toolkit "
-                    "(for example gmail, googlecalendar, linkedin, instagram). "
-                    "Use the 'query' parameter to search for specific actions. Use broad keywords like 'list repositories'."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "toolkit": {"type": "string"},
-                        "query": {
-                            "type": "string",
-                            "description": "Optional search terms. Uses fuzzy matching (e.g., 'list repositories' finds tools containing both words).",
-                        },
-                    },
-                    "required": ["toolkit"],
-                },
-                handler=composio_list_tools,
-            )
+    async def execute(self, slug: str, arguments: dict[str, Any]) -> Any:
+        response = await self._http.post(
+            f"{self._base}/api/v3/tools/execute/{slug}",
+            headers=self._headers,
+            json={"user_id": self._s.composio_user_id, "arguments": arguments},
         )
-        tools.append(
-            Tool(
-                name="composio_execute",
-                description=(
-                    "Execute a Composio tool by slug with JSON arguments. "
-                    "Use composio_list_tools first if you do not know the slug."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "tool_slug": {"type": "string"},
-                        "arguments": {"type": "object"},
-                    },
-                    "required": ["tool_slug"],
-                },
-                handler=composio_execute,
-                needs_approval=composio_needs_approval,
-                describe=composio_describe,
-            )
+        if not response.is_success:
+            return {"error": f"HTTP {response.status_code}", "body": response.text[:2000]}
+        return response.json()
+
+    def _tool(self, item: dict[str, Any]) -> Tool:
+        slug = str(item["slug"])
+        description = str(item.get("description") or item.get("name") or slug)[:400]
+
+        async def handler(args: dict[str, Any], ctx: ToolContext) -> Any:
+            return await self.execute(slug, args)
+
+        return Tool(
+            name=slug[:64],
+            description=description,
+            parameters=clean_parameters(item.get("input_parameters") or item.get("parameters")),
+            handler=handler,
+            needs_approval=lambda _args: composio_needs_approval({"tool_slug": slug}),
+            describe=lambda args: composio_describe({"tool_slug": slug, "arguments": args}),
         )
+
+
+def build_providers(settings: Settings, http: httpx.AsyncClient) -> list[ToolProvider]:
+    """Providers follow whatever is configured in the environment."""
+    providers: list[ToolProvider] = []
+    if settings.composio_api_key.get_secret_value():
+        providers.append(ComposioProvider(settings, http))
+    if settings.nango_secret_key.get_secret_value():
+        providers.append(NangoProvider(settings, http))
+    return providers
+
+
+def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[Tool]:
+    """Static escape-hatch tools. Discoverable tools come from build_providers."""
+    tools: list[Tool] = []
 
     nango_key = settings.nango_secret_key.get_secret_value()
     if nango_key:
@@ -175,7 +255,10 @@ def build_connector_tools(settings: Settings, http: httpx.AsyncClient) -> list[T
         tools.append(
             Tool(
                 name="nango_request",
-                description="Call a third-party REST API through the Nango authenticated proxy.",
+                description=(
+                    "Last-resort generic call to a third-party REST API through the Nango proxy. "
+                    "Prefer the dedicated tools; use this only when none of them fits."
+                ),
                 parameters={
                     "type": "object",
                     "properties": {

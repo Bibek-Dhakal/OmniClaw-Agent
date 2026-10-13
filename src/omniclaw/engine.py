@@ -24,8 +24,9 @@ class AgentEngine:
 
     async def run(self, messages: list[dict[str, Any]], ctx: ToolContext) -> str:
         """Run the loop. The messages list is extended in place with assistant and tool turns."""
-        specs = self._registry.specs() or None
-        for _ in range(self._max_steps):
+        for step in range(self._max_steps):
+            # Recomputed every step: tools found by find_tools are callable on the next step.
+            specs = self._registry.specs(ctx) or None
             response = await acompletion(
                 model=self._profile.model,
                 messages=messages,
@@ -39,6 +40,13 @@ class AgentEngine:
             if not calls:
                 return (message.content or "").strip()
 
+            log.info(
+                "Step %s/%s on %s: %s",
+                step + 1,
+                self._max_steps,
+                ctx.key,
+                [call.function.name for call in calls],
+            )
             messages.append(
                 {
                     "role": "assistant",
